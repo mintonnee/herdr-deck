@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Next Attention</title>
+<link rel="stylesheet" href="pi.css" />
+<script src="pi.js"></script>
+</head>
+<body>
+<div id="status" class="status">Connecting…</div>
+
+<div class="row">
+  <label for="done">Include done</label>
+  <input id="done" type="checkbox" data-setting="includeDone" data-default="true" />
+  <div class="hint">Blocked agents always come first. With this on, finished (done) agents are next in the cycle.</div>
+</div>
+
+<details>
+  <summary>herdr connection (all keys)</summary>
+  <div class="row">
+    <label for="g-front">Raise window</label>
+    <input id="g-front" type="checkbox" data-global="bringToFront" />
+    <div class="hint">Bring the app showing herdr to the front after jumping.</div>
+  </div>
+  <div class="row">
+    <label for="g-frontend">Frontend</label>
+    <select id="g-frontend" data-global="frontend">
+      <option value="herdr-ui">Herdr UI</option>
+      <option value="terminal">Terminal</option>
+    </select>
+    <div class="hint">The app to raise. Herdr UI starts if it is not running.</div>
+  </div>
+  <div class="row">
+    <label for="g-ui-path">Herdr UI path</label>
+    <input id="g-ui-path" type="text" data-global="herdrUiPath" placeholder="auto" />
+    <div class="hint">Herdr UI only. Path to herdr-gpui. Empty = default install location.</div>
+  </div>
+  <div class="row">
+    <label for="g-proc">Terminal</label>
+    <input id="g-proc" type="text" data-global="terminalProcess" placeholder="WindowsTerminal" />
+    <div class="hint">Terminal only. Process name, e.g. WindowsTerminal, wezterm-gui, alacritty.</div>
+  </div>
+  <div class="row">
+    <label for="g-session">Session</label>
+    <input id="g-session" type="text" data-global="session" placeholder="(default)" />
+    <div class="hint">Named herdr session (herdr --session NAME). Empty = default.</div>
+  </div>
+  <div class="row">
+    <label for="g-socket">Socket path</label>
+    <input id="g-socket" type="text" data-global="socketPath" placeholder="auto" />
+    <div class="hint">Override only if auto-detect fails. Empty = %APPDATA%\herdr\herdr.sock.</div>
+  </div>
+  <div class="row"><label></label><button id="reconnect" type="button">Reconnect</button></div>
+</details>
+</body>
+</html>

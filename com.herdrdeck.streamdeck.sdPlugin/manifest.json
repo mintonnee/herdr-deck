@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "Name": "Herdr Deck",
+  "Version": "0.1.0.0",
+  "Author": "herdr-deck",
+  "Description": "Control herdr agent sessions from Stream Deck: live agent status keys, jump to agents that need attention, switch workspaces and send keys.",
+  "UUID": "com.herdrdeck.streamdeck",
+  "Category": "Herdr Deck",
+  "CategoryIcon": "imgs/plugin/category",
+  "Icon": "imgs/plugin/icon",
+  "CodePath": "bin/plugin.mjs",
+  "SDKVersion": 2,
+  "Nodejs": {
+    "Version": "24",
+    "Debug": "disabled"
+  },
+  "OS": [
+    { "Platform": "windows", "MinimumVersion": "10" },
+    { "Platform": "mac", "MinimumVersion": "13" }
+  ],
+  "Software": {
+    "MinimumVersion": "7.1"
+  },
+  "Actions": [
+    {
+      "UUID": "com.herdrdeck.streamdeck.agent",
+      "Name": "Agent",
+      "Tooltip": "Shows one herdr agent's status. Press to jump to it.",
+      "Icon": "imgs/actions/agent",
+      "PropertyInspectorPath": "ui/agent.html",
+      "Controllers": ["Keypad"],
+      "States": [{ "Image": "imgs/actions/agent-key", "ShowTitle": false }],
+      "UserTitleEnabled": false
+    },
+    {
+      "UUID": "com.herdrdeck.streamdeck.attention",
+      "Name": "Next Attention",
+      "Tooltip": "Counts agents waiting on you. Press to jump to the next blocked (then done) agent.",
+      "Icon": "imgs/actions/attention",
+      "PropertyInspectorPath": "ui/attention.html",
+      "Controllers": ["Keypad"],
+      "States": [{ "Image": "imgs/actions/attention-key", "ShowTitle": false }],
+      "UserTitleEnabled": false
+    },
+    {
+      "UUID": "com.herdrdeck.streamdeck.workspace",
+      "Name": "Workspace",
+      "Tooltip": "Shows a herdr workspace's rolled-up status. Press to switch to it.",
+      "Icon": "imgs/actions/workspace",
+      "PropertyInspectorPath": "ui/workspace.html",
+      "Controllers": ["Keypad"],
+      "States": [{ "Image": "imgs/actions/workspace-key", "ShowTitle": false }],
+      "UserTitleEnabled": false
+    },
+    {
+      "UUID": "com.herdrdeck.streamdeck.sendkeys",
+      "Name": "Send Keys",
+      "Tooltip": "Sends key presses (e.g. esc, ctrl+c, enter) to the focused herdr pane.",
+      "Icon": "imgs/actions/sendkeys",
+      "PropertyInspectorPath": "ui/sendkeys.html",
+      "Controllers": ["Keypad"],
+      "States": [{ "Image": "imgs/actions/sendkeys-key", "TitleAlignment": "bottom" }]
+    }
+  ]
+}
