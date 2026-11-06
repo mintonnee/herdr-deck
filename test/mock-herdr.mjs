@@ -99,6 +99,10 @@ export class MockHerdr extends EventEmitter {
       }
       case "pane.send_keys":
         return reply({ type: "ok" });
+      case "server.stop":
+        reply({ type: "ok" });
+        setTimeout(() => this.close(), 20);
+        return;
       default:
         return fail("unknown_method", method);
     }

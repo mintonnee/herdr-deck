@@ -113,7 +113,12 @@ const LIFECYCLE_EVENTS = [
   "pane.agent_detected",
 ];
 
-const STATUS_RANK = { blocked: 0, done: 1, working: 2, idle: 3, unknown: 4 };
+const STATUS_RANK = { blocked: 0, error: 0, done: 1, working: 2, idle: 3, unknown: 4 };
+
+/** Statuses that wait on the person: herdr's blocked, and herdr-core's error too. */
+export function needsYou(status) {
+  return status === "blocked" || status === "error";
+}
 
 /**
  * Live view of a herdr session.
@@ -346,15 +351,19 @@ export class HerdrSession extends EventEmitter {
     return (this.snapshot?.tabs ?? []).find((t) => t.tab_id === id);
   }
 
-  /** Agents needing the user, most urgent first (blocked, then done). */
+  /** Agents needing the user, most urgent first (blocked/error, then done). */
   attentionQueue() {
     return this.agentsOrdered()
-      .filter((a) => a.agent_status === "blocked" || a.agent_status === "done")
+      .filter((a) => needsYou(a.agent_status) || a.agent_status === "done")
       .sort((x, y) => STATUS_RANK[x.agent_status] - STATUS_RANK[y.agent_status]);
   }
 
   focusedPaneId() {
     return this.snapshot?.focused_pane_id ?? null;
+  }
+
+  serverStop() {
+    return this.request("server.stop", {}, 10000);
   }
 
   // ---- commands --------------------------------------------------------------

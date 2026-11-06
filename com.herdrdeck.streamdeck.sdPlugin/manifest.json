@@ -1,9 +1,9 @@
 {
   "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
   "Name": "Herdr Deck",
-  "Version": "0.1.0.0",
+  "Version": "0.2.0.0",
   "Author": "herdr-deck",
-  "Description": "Control herdr agent sessions from Stream Deck: live agent status keys, jump to agents that need attention, switch workspaces and send keys.",
+  "Description": "Control herdr and herdr-core agent sessions from Stream Deck: live agent status keys, jump to agents that need attention, switch workspaces, send keys and turn the session on and off.",
   "UUID": "com.herdrdeck.streamdeck",
   "Category": "Herdr Deck",
   "CategoryIcon": "imgs/plugin/category",
@@ -60,6 +60,16 @@
       "PropertyInspectorPath": "ui/sendkeys.html",
       "Controllers": ["Keypad"],
       "States": [{ "Image": "imgs/actions/sendkeys-key", "TitleAlignment": "bottom" }]
+    },
+    {
+      "UUID": "com.herdrdeck.streamdeck.power",
+      "Name": "Session On/Off",
+      "Tooltip": "Shows whether the herdr / herdr-core session is running. Press to start it; press twice to stop it (ends its programs).",
+      "Icon": "imgs/actions/power",
+      "PropertyInspectorPath": "ui/power.html",
+      "Controllers": ["Keypad"],
+      "States": [{ "Image": "imgs/actions/power-key", "ShowTitle": false }],
+      "UserTitleEnabled": false
     }
   ]
 }

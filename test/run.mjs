@@ -22,7 +22,15 @@ const KEYS = {
   kat: { action: `${A}.attention`, settings: {} },
   kws: { action: `${A}.workspace`, settings: { mode: "slot", slot: 2 } },
   ksk: { action: `${A}.sendkeys`, settings: { keys: "esc ctrl+c", target: "focused" } },
+  kpw: { action: `${A}.power`, settings: { confirmStop: false } },
 };
+
+// A fake `herdr` for the Session On/Off key (see fake-programs.cjs).
+fs.mkdirSync(path.join(cfg, "bin"));
+const fakeHerdr = path.join(cfg, "bin", process.platform === "win32" ? "herdr.exe" : "herdr");
+const fakeLog = path.join(cfg, "calls.log");
+fs.copyFileSync(process.execPath, fakeHerdr);
+const fakeCalls = () => (fs.existsSync(fakeLog) ? fs.readFileSync(fakeLog, "utf8").trim().split("\n").map((l) => JSON.parse(l)) : []);
 
 function svgOf(msg) {
   return decodeURIComponent(msg.payload.image.replace(/^data:image\/svg\+xml;charset=utf8,/, ""));
@@ -58,7 +66,13 @@ const sd = new MockStreamDeck();
 const port = await sd.listen();
 
 const child = spawn(process.execPath, [PLUGIN, "-port", String(port), "-pluginUUID", "PLUGINCTX", "-registerEvent", "registerPlugin", "-info", "{}"], {
-  env: { ...process.env, XDG_CONFIG_HOME: cfg, HERDR_SOCKET_PATH: "" },
+  env: {
+    ...process.env,
+    XDG_CONFIG_HOME: cfg,
+    HERDR_SOCKET_PATH: "",
+    NODE_OPTIONS: `--require "${path.join(import.meta.dirname, "fake-programs.cjs").replaceAll("\\", "/")}"`,
+    FAKE_LOG: fakeLog,
+  },
   stdio: ["ignore", "inherit", "inherit"],
 });
 
@@ -150,6 +164,21 @@ try {
   await waitFor(() => [...herdr.subs].some((s) => s.panes.size === 3 && !s.panes.has("w1:p2")), "resubscribed after rejection", 8000);
   assert.ok(!textsOf(latestImage(sd, "k2")).includes("offline"), "never showed offline");
   console.log("✓ rejected subscription recovery");
+
+  // 9. Session On/Off: server.stop, then `herdr server` (confirmation off for this key)
+  sd.send({ event: "didReceiveGlobalSettings", payload: { settings: { bringToFront: false, herdrPath: fakeHerdr } } });
+  await waitFor(() => textsOf(latestImage(sd, "kpw")).some((t) => t.startsWith("ON")), "power on");
+  herdr.calls.length = 0;
+  sd.send({ event: "keyDown", action: `${A}.power`, context: "kpw", payload: { settings: KEYS.kpw.settings } });
+  await waitFor(() => herdr.calls.find((c) => c.method === "server.stop"), "server.stop");
+  await waitFor(() => textsOf(latestImage(sd, "kpw")).includes("OFF"), "power off", 8000);
+  sd.send({ event: "keyDown", action: `${A}.power`, context: "kpw", payload: { settings: KEYS.kpw.settings } });
+  const started = await waitFor(() => fakeCalls().find((c) => c.exe === "herdr"), "herdr server started");
+  assert.deepEqual(started.args, ["server"]);
+  await herdr.listen(); // what the real `herdr server` would do
+  await waitFor(() => textsOf(latestImage(sd, "kpw")).some((t) => t.startsWith("ON")), "power on again", 10000);
+  snap(sd, "kpw", "5-power-on");
+  console.log("✓ session on/off");
 
   console.log(`\nALL PASSED  (renders in ${OUT})`);
 } finally {
