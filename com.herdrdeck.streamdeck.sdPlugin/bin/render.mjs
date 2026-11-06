@@ -4,6 +4,7 @@ const FONT = "'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Helvetica Neu
 
 export const PALETTE = {
   blocked: { bg: "#C2410C", fg: "#FFFFFF", label: "BLOCKED" },
+  error: { bg: "#B91C1C", fg: "#FFFFFF", label: "ERROR" },
   done: { bg: "#15803D", fg: "#FFFFFF", label: "DONE" },
   working: { bg: "#1D4ED8", fg: "#FFFFFF", label: "WORKING" },
   idle: { bg: "#27272A", fg: "#E4E4E7", label: "IDLE" },
@@ -136,5 +137,36 @@ export function renderWorkspace({ status, label, number, focused, agents }) {
       text(72, 24, number != null ? `#${number}` : "", 17, p.fg, 700) +
       text(72, 84, l, sizeFor(l, 30, 16), p.fg, 700) +
       text(72, 122, status === "unknown" ? `${agents} agents` : `${p.label.toLowerCase()} · ${agents}`, 16, p.fg, 400, 0.85),
+  );
+}
+
+const POWER = {
+  on: { bg: "#14532D", fg: "#DCFCE7", glyph: "#4ADE80", label: "ON" },
+  off: { bg: "#18181B", fg: "#A1A1AA", glyph: "#71717A", label: "OFF" },
+  busy: { bg: "#1E3A8A", fg: "#DBEAFE", glyph: "#93C5FD", label: "" },
+  confirm: { bg: "#C2410C", fg: "#FFFFFF", glyph: "#FFFFFF", label: "" },
+};
+
+/** Power symbol centred at (72, cy). */
+function powerGlyph(cy, color, dashed) {
+  const dash = dashed ? ` stroke-dasharray="7 6"` : "";
+  return (
+    `<path d="M57 ${cy - 13} A21 21 0 1 0 87 ${cy - 13}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round"${dash}/>` +
+    `<line x1="72" y1="${cy - 27}" x2="72" y2="${cy - 2}" stroke="${color}" stroke-width="7" stroke-linecap="round"/>`
+  );
+}
+
+/**
+ * Session power key. state: on | off | busy | confirm.
+ * name: what it powers ("herdr-core", "herdr"); detail: the bottom line.
+ */
+export function renderPower({ state, name, detail }) {
+  const p = POWER[state] ?? POWER.off;
+  return svgUrl(
+    frame(p.bg) +
+      `<rect x="0" y="0" width="144" height="30" fill="#000000" fill-opacity="0.22"/>` +
+      text(72, 21, fit(name, 17), 14, p.fg, 600, 0.9) +
+      powerGlyph(74, p.glyph, state === "busy") +
+      text(72, 128, fit(detail ?? p.label, 13), 18, p.fg, 700),
   );
 }

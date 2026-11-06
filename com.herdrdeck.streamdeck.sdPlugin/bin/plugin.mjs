@@ -1,9 +1,11 @@
 // Herdr Deck — Stream Deck plugin entry point.
 
 import { StreamDeck } from "./streamdeck.mjs";
-import { HerdrSession, resolveEndpoint } from "./herdr.mjs";
-import { renderAgent, renderAttention, renderWorkspace, renderOffline, renderEmpty } from "./render.mjs";
+import { HerdrSession, resolveEndpoint, needsYou } from "./herdr.mjs";
+import { CoreSession } from "./core.mjs";
+import { renderAgent, renderAttention, renderWorkspace, renderOffline, renderEmpty, renderPower } from "./render.mjs";
 import { bringToFront, focusHerdrUi } from "./window.mjs";
+import { raiseHerdrApp, startCore, startHerdrServer } from "./apps.mjs";
 
 const UUID = "com.herdrdeck.streamdeck";
 const A = {
@@ -11,19 +13,25 @@ const A = {
   attention: `${UUID}.attention`,
   workspace: `${UUID}.workspace`,
   sendkeys: `${UUID}.sendkeys`,
+  power: `${UUID}.power`,
 };
 
 const GLOBAL_DEFAULTS = {
+  backend: "herdr", // "herdr" (herdr's socket API) or "core" (herdr-core)
   bringToFront: true,
   frontend: "herdr-ui",
   herdrUiPath: "",
+  herdrAppPath: "",
+  hcPath: "",
+  herdrPath: "",
   terminalProcess: process.platform === "win32" ? "WindowsTerminal" : "",
   socketPath: "",
   session: "",
 };
 
 const sd = new StreamDeck();
-const herdr = new HerdrSession();
+let herdr = null;
+let backend = null;
 
 /** context -> { action, settings } for every visible key. */
 const keys = new Map();
@@ -31,14 +39,39 @@ const keys = new Map();
 const lastImage = new Map();
 /** contexts whose property inspector is open. */
 const openInspectors = new Set();
+/** power key context -> { busy: "starting…" | "stopping…" | null, confirmUntil, timer }. */
+const power = new Map();
 
 function globals() {
   return { ...GLOBAL_DEFAULTS, ...(sd.globalSettings ?? {}) };
 }
 
+function isCore() {
+  return backend === "core";
+}
+
+function sessionOptions(g) {
+  return {
+    socketPath: g.socketPath || undefined,
+    session: g.session || undefined,
+    herdrAppPath: g.herdrAppPath || undefined,
+  };
+}
+
 function applyGlobals() {
   const g = globals();
-  herdr.configure({ socketPath: g.socketPath || undefined, session: g.session || undefined });
+  const want = g.backend === "core" ? "core" : "herdr";
+  if (want !== backend) {
+    herdr?.stop();
+    herdr?.removeAllListeners("update");
+    backend = want;
+    herdr = want === "core" ? new CoreSession(sessionOptions(g)) : new HerdrSession(sessionOptions(g));
+    herdr.on("update", renderAll);
+    herdr.start();
+    renderAll();
+  } else {
+    herdr.configure(sessionOptions(g));
+  }
 }
 
 function setImage(context, image) {
@@ -75,19 +108,40 @@ function agentSubtitle(a) {
   const ws = herdr.workspace(a.workspace_id);
   const tab = herdr.tab(a.tab_id);
   if (ws && tab && (ws.tab_count ?? 1) > 1 && tab.label) return `${ws.label} · ${tab.label}`;
-  return ws?.label ?? a.workspace_id;
+  return ws?.label ?? a.location ?? a.workspace_id ?? "";
+}
+
+function backendName() {
+  const g = globals();
+  const base = isCore() ? "herdr-core" : "herdr";
+  return g.session ? `${base} · ${g.session}` : base;
 }
 
 // ---- rendering --------------------------------------------------------------------
+
+function renderPowerKey(context) {
+  const p = power.get(context) ?? {};
+  const name = backendName();
+  if (p.busy) return setImage(context, renderPower({ state: "busy", name, detail: p.busy }));
+  if (herdr.connected && p.confirmUntil > Date.now()) {
+    return setImage(context, renderPower({ state: "confirm", name, detail: "again: stop" }));
+  }
+  if (herdr.connected) {
+    const n = herdr.agentsOrdered().length;
+    return setImage(context, renderPower({ state: "on", name, detail: n ? `ON · ${n}` : "ON" }));
+  }
+  setImage(context, renderPower({ state: "off", name, detail: "OFF" }));
+}
 
 function renderKey(context) {
   const key = keys.get(context);
   if (!key) return;
   const { action, settings } = key;
   if (action === A.sendkeys) return; // uses the user's own title over the static icon
+  if (action === A.power) return renderPowerKey(context);
 
   if (!herdr.connected) {
-    setImage(context, renderOffline());
+    setImage(context, renderOffline(isCore() ? "herdr-core" : "herdr"));
     return;
   }
 
@@ -110,7 +164,7 @@ function renderKey(context) {
     );
   } else if (action === A.attention) {
     const agents = herdr.agentsOrdered();
-    const blocked = agents.filter((a) => a.agent_status === "blocked").length;
+    const blocked = agents.filter((a) => needsYou(a.agent_status)).length;
     const done = settings.includeDone === false ? 0 : agents.filter((a) => a.agent_status === "done").length;
     setImage(context, renderAttention({ blocked, done, total: agents.length }));
   } else if (action === A.workspace) {
@@ -140,6 +194,12 @@ function renderAll() {
 
 // ---- property inspector data --------------------------------------------------------
 
+function endpointLabel() {
+  if (!isCore()) return resolveEndpoint(herdr.options).endpoint;
+  const info = herdr.endpointInfo;
+  return info.endpoint ? `${info.endpoint} (${info.source})` : `error: ${info.error}`;
+}
+
 function pushOptions(context) {
   const key = keys.get(context);
   if (!key) return;
@@ -156,8 +216,10 @@ function pushOptions(context) {
   }));
   sd.sendToPropertyInspector(key.action, context, {
     type: "options",
+    backend,
+    backendName: isCore() ? "herdr-core" : "herdr",
     connected: herdr.connected,
-    endpoint: resolveEndpoint(herdr.options).endpoint,
+    endpoint: endpointLabel(),
     lastError: herdr.lastError,
     version: herdr.snapshot?.version ?? null,
     agents,
@@ -172,6 +234,8 @@ async function raiseFrontend() {
   const g = globals();
   if (!g.bringToFront) return;
   if (g.frontend === "terminal") bringToFront(g.terminalProcess);
+  // herdr-core terminals are shown by the Herdr app.
+  else if (isCore() || g.frontend === "herdr-app") await raiseHerdrApp(g.herdrAppPath || undefined);
   else await focusHerdrUi(g.herdrUiPath);
 }
 
@@ -180,13 +244,75 @@ async function focusPane(paneId) {
   await raiseFrontend();
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Re-read until the session is (or is no longer) reachable. */
+async function waitConnected(want, ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    await herdr.refresh();
+    if (herdr.connected === want) return true;
+    await sleep(300);
+  }
+  return false;
+}
+
+async function onPowerKey(context, settings) {
+  const p = power.get(context) ?? {};
+  power.set(context, p);
+  if (p.busy) return;
+  const g = globals();
+  await herdr.refresh();
+
+  if (herdr.connected) {
+    // Stopping ends every program in the session: ask for a second press.
+    if (settings.confirmStop !== false && !(p.confirmUntil > Date.now())) {
+      p.confirmUntil = Date.now() + 3000;
+      clearTimeout(p.timer);
+      p.timer = setTimeout(() => renderPowerKey(context), 3100);
+      return renderPowerKey(context);
+    }
+    p.confirmUntil = 0;
+    p.busy = "stopping…";
+    renderPowerKey(context);
+    try {
+      await herdr.serverStop().catch((err) => {
+        // The server may drop the connection as it goes down.
+        if (!["closed", "ECONNRESET", "EPIPE"].includes(err.code)) throw err;
+      });
+      if (!(await waitConnected(false, 15000))) throw new Error("server is still running");
+      sd.showOk(context);
+    } finally {
+      p.busy = null;
+      renderAll();
+    }
+    return;
+  }
+
+  p.busy = "starting…";
+  renderPowerKey(context);
+  try {
+    const opts = { session: g.session || undefined, socketPath: g.socketPath || undefined };
+    if (isCore()) await startCore({ ...opts, hcPath: g.hcPath || undefined });
+    else await startHerdrServer({ ...opts, herdrPath: g.herdrPath || undefined });
+    if (!(await waitConnected(true, 20000))) throw new Error("server did not come up");
+    herdr.restart();
+    sd.showOk(context);
+  } finally {
+    p.busy = null;
+    renderAll();
+  }
+}
+
 async function onKeyDown(context) {
   const key = keys.get(context);
   if (!key) return;
   const { action, settings } = key;
   try {
+    if (action === A.power) return await onPowerKey(context, settings);
+
     if (!herdr.connected) await herdr.refresh();
-    if (!herdr.connected) throw new Error("herdr is not running");
+    if (!herdr.connected) throw new Error(`${isCore() ? "herdr-core" : "herdr"} is not running`);
 
     if (action === A.agent) {
       const a = agentForKey(settings);
@@ -194,7 +320,7 @@ async function onKeyDown(context) {
       await focusPane(a.pane_id);
     } else if (action === A.attention) {
       let queue = herdr.attentionQueue();
-      if (settings.includeDone === false) queue = queue.filter((a) => a.agent_status === "blocked");
+      if (settings.includeDone === false) queue = queue.filter((a) => needsYou(a.agent_status));
       if (!queue.length) {
         sd.showOk(context);
         return;
@@ -215,9 +341,10 @@ async function onKeyDown(context) {
         .map((k) => k.trim())
         .filter(Boolean);
       if (!list.length) throw new Error("no keys configured");
-      let paneId = herdr.focusedPaneId();
+      let paneId;
       if (settings.target === "pane" && settings.paneId) paneId = settings.paneId;
       else if (settings.target === "slot") paneId = agentForKey({ slot: settings.slot })?.pane_id;
+      else paneId = herdr.currentFocus ? await herdr.currentFocus() : herdr.focusedPaneId();
       if (!paneId) throw new Error("no target pane");
       await herdr.sendKeys(paneId, list);
       sd.showOk(context);
@@ -241,6 +368,8 @@ sd.on("willDisappear", (msg) => {
   keys.delete(msg.context);
   lastImage.delete(msg.context);
   openInspectors.delete(msg.context);
+  clearTimeout(power.get(msg.context)?.timer);
+  power.delete(msg.context);
 });
 
 sd.on("didReceiveSettings", (msg) => {
@@ -274,8 +403,5 @@ sd.on("sendToPlugin", (msg) => {
   }
 });
 
-herdr.on("update", renderAll);
-
-sd.connect();
 applyGlobals();
-herdr.start();
+sd.connect();

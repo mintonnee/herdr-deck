@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Session On/Off</title>
+<link rel="stylesheet" href="pi.css" />
+<script src="pi.js"></script>
+</head>
+<body>
+<div id="status" class="status">Connecting…</div>
+
+<div class="row">
+  <label for="confirm">Confirm stop</label>
+  <input id="confirm" type="checkbox" data-setting="confirmStop" data-default="true" />
+  <div class="hint">Stopping ends every program in the session (kept herdr-core terminals get a fresh shell on the next start). With this on, stopping takes a second press within 3 seconds.</div>
+</div>
+<div class="row">
+  <label></label>
+  <div class="hint">Off: press to start. herdr-core runs "hc server start", herdr runs "herdr server". The session, socket and program paths come from the connection settings below.</div>
+</div>
+
+<div id="connection"></div>
+</body>
+</html>
