@@ -11,8 +11,7 @@
   "CodePath": "bin/plugin.mjs",
   "SDKVersion": 2,
   "Nodejs": {
-    "Version": "24",
-    "Debug": "disabled"
+    "Version": "24"
   },
   "OS": [
     { "Platform": "windows", "MinimumVersion": "10" },
